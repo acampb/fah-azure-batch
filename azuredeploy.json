@@ -14,14 +14,14 @@
             "metadata": {
                 "description": "Virtual Machine SKU size used within the VM Scale Set"
             },
-            "defaultValue": "Standard_F8s_v2"
+            "defaultValue": "Standard_F4s_v2"
         },
         "vmCount": {
             "type": "int",
             "metadata": {
                 "description": "Starting/Minimum number of VM instances"
             },
-            "defaultValue": 2
+            "defaultValue": 5
         },
         "foldingUserName": {
             "type": "string",
