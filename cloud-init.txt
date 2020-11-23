@@ -1,0 +1,7 @@
+#cloud-config
+runcmd:
+  - cd "/home/azureuser"
+  - mkdir /home/azureuser/fahclient
+  - wget https://download.foldingathome.org/releases/public/release/fahclient/debian-testing-64bit/v7.4/fahclient_7.4.4_amd64.deb
+  - dpkg-deb -x /home/azureuser/fahclient_7.4.4_amd64.deb /home/azureuser/fahclient
+  - /home/azureuser/fahclient/usr/bin/FAHClient --user=Andrew_Campbell --passkey=82e16164727ea40e82e16164727ea40e --team=238681 --power=full --cpus=0

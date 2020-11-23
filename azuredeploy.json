@@ -1,0 +1,272 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmPriority": {
+            "type": "string",
+            "metadata": {
+                "description": "description"
+            },
+            "defaultValue": "Spot"
+        },
+        "vmSize": {
+            "type": "string",
+            "metadata": {
+                "description": "Virtual Machine SKU size used within the VM Scale Set"
+            },
+            "defaultValue": "Standard_F8s_v2"
+        },
+        "vmMinCount": {
+            "type": "int",
+            "metadata": {
+                "description": "Starting/Minimum number of VM instances"
+            },
+            "defaultValue": 2
+        },
+        "vmMaxCount": {
+            "type": "int",
+            "metadata": {
+                "description": "Maximim number of VM instances"
+            },
+            "defaultValue": 3
+        },
+        "foldingUserName": {
+            "type": "string",
+            "metadata": {
+                "description": "Folding@home username, will be injected into cloud-init script"
+            },
+            "defaultValue": "Andrew_Campbell"
+        },
+        "foldingPasskey": {
+            "type": "string",
+            "metadata": {
+                "description": "Folding@home passkey, will be injected into cloud-init script"
+            },
+            "defaultValue": "82e16164727ea40e82e16164727ea40e"
+        },
+        "foldingTeamId": {
+            "type": "string",
+            "metadata": {
+                "description": "Folding@home team id, will be injected into cloud-init script"
+            },
+            "defaultValue": "238681"
+        }
+    },
+    "functions": [],
+    "variables": {
+        "customData": "[base64(concat('#cloud-config\nruncmd:\n  - cd
+        /home/azureuser\n  - mkdir /home/azureuser/fahclient\n  - wget https://download.foldingathome.org/releases/public/release/fahclient/debian-testing-64bit/v7.4/fahclient_7.4.4_amd64.deb\n  - dpkg-deb -x /home/azureuser/fahclient_7.4.4_amd64.deb /home/azureuser/fahclient\n  - /home/azureuser/fahclient/usr/bin/FAHClient --user=', parameters('foldingUserName'), ' --passkey=', parameters('foldingPasskey'), ' --team=', parameters('foldingTeamId'), ' --power=full --cpus=0'))]",
+        "vmPassword": "[concat('P', uniqueString(resourceGroup().id), '!')]",
+        "bootDiagnosticsStorageAccountName": "[concat('stfolddiags', uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "name": "vnet-folding-001",
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2019-11-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.0.0.0/16"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "snet-001",
+                        "properties": {
+                            "addressPrefix": "10.0.0.0/24"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "nsg-folding-001",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2019-11-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "allowSsh",
+                        "properties": {
+                            "description": "allow ssh",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 100,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('bootDiagnosticsStorageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "location": "[resourceGroup().location]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachineScaleSets",
+            "name": "vmss-folding-001",
+            "apiVersion": "2019-07-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', 'vnet-folding-001')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('bootDiagnosticsStorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "[parameters('vmSize')]",
+                "capacity": 1
+            },
+            "properties": {
+                "upgradePolicy": {
+                    "mode": "Automatic"
+                },
+                "virtualMachineProfile": {
+                    "osProfile": {
+                        "computerNamePrefix": "vm-",
+                        "adminUsername": "azureuser",
+                        "adminPassword": "[variables('vmPassword')]",
+                        "customData": "[variables('customData')]",
+                        "linuxConfiguration": {
+                            "disablePasswordAuthentication": false,
+                            "provisionVMAgent": true
+                        }
+                    },
+                    "storageProfile": {
+                        "osDisk": {
+                            "createOption": "FromImage",
+                            "caching": "ReadWrite",
+                            "managedDisk": {
+                                "storageAccountType": "Standard_LRS"
+                            },
+                            "diskSizeGB": 32
+                        },
+                        "imageReference": {
+                            "publisher": "Canonical",
+                            "offer": "UbuntuServer",
+                            "sku": "18.04-LTS",
+                            "version": "latest"
+                        }
+                    },
+                    "networkProfile": {
+                        "networkInterfaceConfigurations": [
+                            {
+                                "name": "nic-folding-001",
+                                "properties": {
+                                    "primary": true,
+                                    "networkSecurityGroup": {
+                                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-folding-001')]"
+                                    },
+                                    "ipConfigurations": [
+                                        {
+                                            "name": "ipconfig",
+                                            "properties": {
+                                                "primary": true,
+                                                "subnet": {
+                                                    "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'vnet-folding-001', 'snet-001')]"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    "diagnosticsProfile": {
+                        "bootDiagnostics": {
+                            "enabled": true,
+                            "storageUri": "[concat('http://', variables('bootDiagnosticsStorageAccountName'), '.blob.core.windows.net')]"
+                        }
+                    },
+                    "priority": "[parameters('vmPriority')]",
+                    "evictionPolicy": "Delete",
+                    "billingProfile": {
+                        "maxPrice": -1
+                    }
+                },
+                "overprovision": false
+            }
+        },
+        {
+            "type": "Microsoft.Insights/autoscalesettings",
+            "apiVersion": "2015-04-01",
+            "location": "[resourceGroup().location]",
+            "name": "autoscalehost",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets', 'vmss-folding-001')]"
+            ],
+            "properties": {
+                "name": "autoscalehost",
+                "enabled": true,
+                "targetResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', 'vmss-folding-001')]",
+                "profiles": [
+                    {
+                        "name": "profile001",
+                        "capacity": {
+                            "default": "[parameters('vmMinCount')]",
+                            "minimum": "[parameters('vmMinCount')]",
+                            "maximum": "[parameters('vmMaxCount')]"
+                        },
+                        "rules": [
+                            {
+                                "scaleAction": {
+                                    "direction": "Increase",
+                                    "type": "ChangeCount",
+                                    "value": 1,
+                                    "cooldown": "PT5M"
+                                },
+                                "metricTrigger": {
+                                    "metricName": "Percentage CPU",
+                                    "metricResourceUri" : "[resourceId('Microsoft.Compute/virtualMachineScaleSets', 'vmss-folding-001')]",
+                                    "operator": "GreaterThan",
+                                    "threshold": 50,
+                                    "statistic": "Average",
+                                    "timeGrain": "PT1M",
+                                    "timeAggregation": "Average",
+                                    "timeWindow": "PT5M"
+                                }
+                            },
+                            {
+                                "scaleAction": {
+                                    "direction": "Decrease",
+                                    "type": "ChangeCount",
+                                    "value": 1,
+                                    "cooldown": "PT5M"
+                                },
+                                "metricTrigger": {
+                                    "metricName": "Percentage CPU",
+                                    "metricResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', 'vmss-folding-001')]",
+                                    "operator": "LessThan",
+                                    "threshold": 10,
+                                    "statistic": "Average",
+                                    "timeGrain": "PT1M",
+                                    "timeAggregation": "Average",
+                                    "timeWindow": "PT5M"
+                                }
+                            }
+
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "vmAdminPassword": {
+            "type": "string",
+            "value": "[variables('vmPassword')]"
+        }
+    }
+}
