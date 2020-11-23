@@ -16,19 +16,12 @@
             },
             "defaultValue": "Standard_F8s_v2"
         },
-        "vmMinCount": {
+        "vmCount": {
             "type": "int",
             "metadata": {
                 "description": "Starting/Minimum number of VM instances"
             },
             "defaultValue": 2
-        },
-        "vmMaxCount": {
-            "type": "int",
-            "metadata": {
-                "description": "Maximim number of VM instances"
-            },
-            "defaultValue": 3
         },
         "foldingUserName": {
             "type": "string",
@@ -127,7 +120,7 @@
             ],
             "sku": {
                 "name": "[parameters('vmSize')]",
-                "capacity": 1
+                "capacity": "[parameters('vmCount')]"
             },
             "properties": {
                 "upgradePolicy": {
@@ -191,7 +184,7 @@
                         }
                     },
                     "priority": "[parameters('vmPriority')]",
-                    "evictionPolicy": "Delete",
+                    "evictionPolicy": "Deallocate",
                     "billingProfile": {
                         "maxPrice": -1
                     }
@@ -215,49 +208,32 @@
                     {
                         "name": "profile001",
                         "capacity": {
-                            "default": "[parameters('vmMinCount')]",
-                            "minimum": "[parameters('vmMinCount')]",
-                            "maximum": "[parameters('vmMaxCount')]"
+                            "default": "[parameters('vmCount')]",
+                            "minimum": "[parameters('vmCount')]",
+                            "maximum": "[parameters('vmCount')]"
                         },
-                        "rules": [
-                            {
-                                "scaleAction": {
-                                    "direction": "Increase",
-                                    "type": "ChangeCount",
-                                    "value": 1,
-                                    "cooldown": "PT5M"
-                                },
-                                "metricTrigger": {
-                                    "metricName": "Percentage CPU",
-                                    "metricResourceUri" : "[resourceId('Microsoft.Compute/virtualMachineScaleSets', 'vmss-folding-001')]",
-                                    "operator": "GreaterThan",
-                                    "threshold": 50,
-                                    "statistic": "Average",
-                                    "timeGrain": "PT1M",
-                                    "timeAggregation": "Average",
-                                    "timeWindow": "PT5M"
-                                }
-                            },
-                            {
-                                "scaleAction": {
-                                    "direction": "Decrease",
-                                    "type": "ChangeCount",
-                                    "value": 1,
-                                    "cooldown": "PT5M"
-                                },
-                                "metricTrigger": {
-                                    "metricName": "Percentage CPU",
-                                    "metricResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', 'vmss-folding-001')]",
-                                    "operator": "LessThan",
-                                    "threshold": 10,
-                                    "statistic": "Average",
-                                    "timeGrain": "PT1M",
-                                    "timeAggregation": "Average",
-                                    "timeWindow": "PT5M"
-                                }
+                        "rules": [],
+                        "recurrence": {
+                            "frequency": "Week",
+                            "schedule": {
+                                "timeZone": "Eastern Standard Time",
+                                "days": [
+                                    "Monday",
+                                    "Tuesday",
+                                    "Wednesday",
+                                    "Thursday",
+                                    "Friday",
+                                    "Saturday",
+                                    "Sunday"
+                                ],
+                                "hours": [
+                                    1
+                                ],
+                                "minutes": [
+                                    0
+                                ]
                             }
-
-                        ]
+                        }
                     }
                 ]
             }
